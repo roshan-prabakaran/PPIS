@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 2rem;">
+    <div style="text-align: center; margin-bottom: 3rem;">
+        <h1 style="font-size: 2.5rem; color: #1e3a8a; margin-bottom: 0.5rem;">
+            <i class="fas fa-flask"></i> Policy Simulation Lab
+        </h1>
+        <p>Test "what-if" scenarios and visualize their impact on national development</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 350px 1fr; gap: 3rem; align-items: start;">
+        <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: #374151; margin-bottom: 1rem;">
+                    <i class="fas fa-cog"></i> Scenario Configuration
+                </h3>
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Policy Scenario</label>
+                <select id="scenarioSelect" style="width: 100%; padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 8px;">
+                    <option value="">Choose a scenario...</option>
+                    {% for key, scenario in scenarios.items() %}
+                    <option value="{{ key }}">{{ scenario.name }}</option>
+                    {% endfor %}
+                </select>
+                <div id="scenarioDescription" style="margin-top: 0.5rem; padding: 0.75rem; background: #f8fafc; border-radius: 6px; font-size: 0.9rem; color: #6b7280; min-height: 40px;"></div>
+            </div>
+
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: #374151; margin-bottom: 1rem;">
+                    <i class="fas fa-sliders-h"></i> Policy Intensity
+                </h3>
+                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                    <input type="range" id="intensitySlider" min="10" max="100" value="50" style="flex: 1;">
+                    <div style="background: #f3f4f6; padding: 0.5rem 1rem; border-radius: 8px; font-weight: bold; color: #3b82f6;">
+                        <span id="intensityValue">50</span>%
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6b7280;">
+                    <span>Conservative</span>
+                    <span>Moderate</span>
+                    <span>Aggressive</span>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 2rem;">
+                <button id="runSimulation" class="btn-primary" disabled style="width: 100%;">
+                    <i class="fas fa-play"></i> Run Simulation
+                </button>
+            </div>
+        </div>
+
+        <div id="simulationResults" style="display: none; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+            <div style="background: linear-gradient(135deg, #f8fafc, #e2e8f0); padding: 2rem; border-bottom: 1px solid #e5e7eb;">
+                <h2 style="color: #1e3a8a; margin-bottom: 1.5rem;">Simulation Results</h2>
+                <div id="odiComparison" class="odi-comparison"></div>
+            </div>
+
+            <div style="padding: 2rem;">
+                <h3 style="color: #374151; margin-bottom: 1rem;">Impact Timeline</h3>
+                <div style="height: 400px;">
+                    <canvas id="timelineChart"></canvas>
+                </div>
+
+                <h3 style="color: #374151; margin: 2rem 0 1rem;">Detailed Impact Analysis</h3>
+                <div id="indicatorsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;"></div>
+            </div>
+
+            <div style="padding: 2rem; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
+                <button onclick="window.location.href='/presentation'" class="btn-primary">
+                    <i class="fas fa-presentation"></i> View Presentation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentSimulationData = null;
+let timelineChart = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    document.getElementById('scenarioSelect').addEventListener('change', function() {
+        const scenarios = {{ scenarios|tojson }};
+        const description = scenarios[this.value]?.description || '';
+        document.getElementById('scenarioDescription').textContent = description;
+        document.getElementById('runSimulation').disabled = !this.value;
+    });
+
+    document.getElementById('intensitySlider').addEventListener('input', function() {
+        document.getElementById('intensityValue').textContent = this.value;
+    });
+
+    document.getElementById('runSimulation').addEventListener('click', runSimulation);
+}
+
+function runSimulation() {
+    const scenario = document.getElementById('scenarioSelect').value;
+    const intensity = document.getElementById('intensitySlider').value;
+    
+    if (!scenario) return;
+    
+    showLoading();
+    
+    fetch('/api/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            scenario: scenario, 
+            intensity: parseInt(intensity)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        currentSimulationData = data;
+        displayResults(data);
+        hideLoading();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        hideLoading();
+        alert('Simulation failed. Please try again.');
+    });
+}
+
+function displayResults(data) {
+    document.getElementById('simulationResults').style.display = 'block';
+    
+    // Update ODI comparison
+    const odiChange = data.odi_change;
+    const changeClass = odiChange > 0 ? 'positive' : 'negative';
+    
+    document.getElementById('odiComparison').innerHTML = `
+        <div class="odi-item">
+            <span class="label">Current ODI</span>
+            <span class="value">${data.current_odi}</span>
+        </div>
+        <div style="font-size: 2rem; color: #3b82f6;">→</div>
+        <div class="odi-item">
+            <span class="label">Projected ODI</span>
+            <span class="value">${data.projected_odi}</span>
+        </div>
+        <div class="odi-change ${changeClass}">
+            ${odiChange > 0 ? '+' : ''}${odiChange.toFixed(1)}
+        </div>
+    `;
+    
+    createTimelineChart(data);
+    createIndicatorsAnalysis(data);
+    
+    document.getElementById('simulationResults').scrollIntoView({ behavior: 'smooth' });
+}
+
+function createTimelineChart(data) {
+    const ctx = document.getElementById('timelineChart').getContext('2d');
+    
+    if (timelineChart) {
+        timelineChart.destroy();
+    }
+    
+    const datasets = [];
+    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'];
+    let colorIndex = 0;
+    
+    Object.keys(data.time_series).forEach(indicator => {
+        datasets.push({
+            label: indicator.replace('_', ' ').toUpperCase(),
+            data: data.time_series[indicator],
+            borderColor: colors[colorIndex % colors.length],
+            backgroundColor: colors[colorIndex % colors.length] + '20',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.4
+        });
+        colorIndex++;
+    });
+    
+    timelineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.months,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `${data.scenario.name} - Impact Timeline`
+                },
+                legend: {
+                    position: 'bottom'
+                }
+            },
+            scales: {
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Indicator Values'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createIndicatorsAnalysis(data) {
+    const grid = document.getElementById('indicatorsGrid');
+    grid.innerHTML = '';
+    
+    Object.keys(data.current_indicators).forEach(key => {
+        const current = data.current_indicators[key];
+        const projected = data.projected_indicators[key];
+        const change = projected - current;
+        const changePercent = ((change / current) * 100).toFixed(1);
+        
+        const card = document.createElement('div');
+        card.style.cssText = 'background: #f9fafb; padding: 1rem; border-radius: 8px; border-left: 4px solid #3b82f6;';
+        card.innerHTML = `
+            <h4 style="color: #374151; margin-bottom: 1rem; font-size: 0.9rem; text-transform: uppercase;">
+                ${key.replace('_', ' ')}
+            </h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; text-align: center;">
+                <div style="padding: 0.5rem; background: #f3f4f6; border-radius: 4px;">
+                    <div style="font-size: 0.8rem; color: #6b7280;">Current</div>
+                    <div style="font-weight: bold;">${current.toFixed(1)}</div>
+                </div>
+                <div style="padding: 0.5rem; background: #dbeafe; border-radius: 4px;">
+                    <div style="font-size: 0.8rem; color: #6b7280;">Projected</div>
+                    <div style="font-weight: bold;">${projected.toFixed(1)}</div>
+                </div>
+                <div style="padding: 0.5rem; background: ${change > 0 ? '#dcfce7' : '#fee2e2'}; color: ${change > 0 ? '#166534' : '#dc2626'}; border-radius: 4px;">
+                    <div style="font-size: 0.8rem;">Change</div>
+                    <div style="font-weight: bold;">${change > 0 ? '+' : ''}${changePercent}%</div>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function showLoading() {
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+</script>
+{% endblock %}

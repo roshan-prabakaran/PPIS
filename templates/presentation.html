@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Presentation Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      background: #f4f4f4;
+    }
+    iframe {
+      width: 100%;
+      height: 100vh;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Embed PDF from static folder -->
+  <iframe src="{{ url_for('static', filename='files/ppt.pdf') }}"></iframe>
+
+</body>
+</html>
