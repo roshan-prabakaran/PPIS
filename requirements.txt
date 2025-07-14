@@ -1,3 +1,29 @@
+# --- Build tools (required for packaging) ---
+setuptools>=61
+wheel
+
+# --- Core Web Framework ---
 Flask==2.3.3
-Werkzeug==2.3.7
-numpy==1.24.3
+
+# --- AI/ML Libraries ---
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+tensorflow>=2.12.0  # Optional, if using LSTM
+# OR
+# keras>=2.12.0  # If you're using Keras separately
+
+# --- Visualization ---
+matplotlib>=3.7.0
+seaborn>=0.12.2
+chartjs  # Not installable via pip, used via CDN in templates
+
+# --- PDF handling (optional, if needed server-side) ---
+PyMuPDF>=1.23.3  # For advanced PDF rendering (optional)
+
+# --- Utilities (optional) ---
+python-dotenv>=1.0.0
+
+# --- Render deploy fix ---
+gunicorn>=21.2.0  # WSGI server (required by Render if using Flask)
